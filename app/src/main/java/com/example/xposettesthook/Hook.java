@@ -4,6 +4,7 @@ package com.example.xposettesthook;
 import android.widget.TextView;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 
@@ -19,6 +20,12 @@ public class Hook implements IXposedHookLoadPackage {
         XposedBridge.log("handleLoadPackage 執行！");
         if (lpparam.packageName.contentEquals("com.example.xposedtest")) {
             XposedBridge.log("開始 hook 測試");
+
+            final Class<?> finalMainActivityClass = lpparam.classLoader.loadClass("com.example.xposedtest.MainActivity");
+
+            // hook private test
+            hookPrivate(finalMainActivityClass, lpparam.classLoader);
+
             XposedHelpers.findAndHookMethod(TextView.class, "setText", CharSequence.class,
                     new XC_MethodHook() {
                         @Override
@@ -30,36 +37,6 @@ public class Hook implements IXposedHookLoadPackage {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             XposedBridge.log("處理 setText 方法後");
-                        }
-                    });
-
-            /**
-             * Hook private 資料練習
-             */
-            Class<?> MainActivityClass = null;
-            MainActivityClass = lpparam.classLoader.loadClass("com.example.xposedtest.MainActivity");
-            final Class<?> finalMainActivityClass = MainActivityClass;
-            XposedHelpers.findAndHookMethod("com.example.xposedtest.MainActivity", lpparam.classLoader,
-                    "onResume", new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            super.beforeHookedMethod(param);
-                            XposedBridge.log("Hook private field 練習");
-                            XposedBridge.log("Class name = " + finalMainActivityClass.getName());
-                            Field field = finalMainActivityClass.getDeclaredField("privateStrTest");
-                            // 一定要設定 Accessible = true 才能存取 private
-                            field.setAccessible(true);
-                            XposedBridge.log("privateStrTest 方法之前 = " + field.get(param.thisObject));
-                        }
-
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                            super.afterHookedMethod(param);
-                            XposedBridge.log("Hook private field 練習");
-                            XposedBridge.log("Class name = " + finalMainActivityClass.getName());
-                            Field field = finalMainActivityClass.getDeclaredField("privateStrTest");
-                            field.setAccessible(true);
-                            XposedBridge.log("privateStrTest 方法之後 = " + field.get(param.thisObject));
                         }
                     });
 
@@ -92,8 +69,8 @@ public class Hook implements IXposedHookLoadPackage {
                                 XposedBridge.log("listActualTypeArguments 方法之後 = " + listActualTypeArguments[i]);
                                 Class<?> CustomBean = (Class<?>) listActualTypeArguments[i];
                                 Field[] fields = CustomBean.getFields();
-                                for (Field f :fields){
-                                    XposedBridge.log("他的屬性有什麼呢 = "+f.getName());
+                                for (Field f : fields) {
+                                    XposedBridge.log("他的屬性有什麼呢 = " + f.getName());
                                 }
 //                                Field a = CustomBean.getField("a");
 //                                a.setAccessible(true);
@@ -120,5 +97,50 @@ public class Hook implements IXposedHookLoadPackage {
                         }
                     });
         }
+    }
+
+    private void hookPrivate(final Class<?> finalMainActivityClass, ClassLoader classLoader) {
+        /**
+         * Hook private 資料練習
+         */
+
+        XposedHelpers.findAndHookMethod("com.example.xposedtest.MainActivity", classLoader,
+                "onResume", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        super.beforeHookedMethod(param);
+                        XposedBridge.log("Hook private field 練習");
+                        XposedBridge.log("Class name = " + finalMainActivityClass.getName());
+                        Field field = finalMainActivityClass.getDeclaredField("privateStrTest");
+                        // 一定要設定 Accessible = true 才能存取 private
+                        field.setAccessible(true);
+                        XposedBridge.log("privateStrTest 方法之前 = " + field.get(param.thisObject));
+                    }
+
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        super.afterHookedMethod(param);
+                        XposedBridge.log("Hook private field 練習");
+                        XposedBridge.log("Class name = " + finalMainActivityClass.getName());
+                        Field field = finalMainActivityClass.getDeclaredField("privateStrTest");
+                        field.setAccessible(true);
+                        XposedBridge.log("privateStrTest 方法之後 = " + field.get(param.thisObject));
+                    }
+                });
+
+        // 1. 將 private method 變成可讀取
+        Method privateMethod = XposedHelpers.findMethodExact(finalMainActivityClass,"testPrivateMethod");
+        privateMethod.setAccessible(true);
+
+        // 2. 即可 hook private method
+        XposedHelpers.findAndHookMethod(finalMainActivityClass,  "testPrivateMethod",
+                new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                        super.afterHookedMethod(param);
+                        param.setResult(true);
+                        XposedBridge.log("我改了 private's method");
+                    }
+                });
     }
 }
