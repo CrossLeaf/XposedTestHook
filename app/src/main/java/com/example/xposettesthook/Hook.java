@@ -99,7 +99,7 @@ public class Hook implements IXposedHookLoadPackage {
         }
     }
 
-    private void hookPrivate(final Class<?> finalMainActivityClass, ClassLoader classLoader) {
+    private void hookPrivate(final Class<?> finalMainActivityClass, final ClassLoader classLoader) {
         /**
          * Hook private 資料練習
          */
@@ -125,15 +125,17 @@ public class Hook implements IXposedHookLoadPackage {
                         Field field = finalMainActivityClass.getDeclaredField("privateStrTest");
                         field.setAccessible(true);
                         XposedBridge.log("privateStrTest 方法之後 = " + field.get(param.thisObject));
+
+                        callMethodTest(classLoader, param.thisObject);
                     }
                 });
 
         // 1. 將 private method 變成可讀取
-        Method privateMethod = XposedHelpers.findMethodExact(finalMainActivityClass,"testPrivateMethod");
+        Method privateMethod = XposedHelpers.findMethodExact(finalMainActivityClass, "testPrivateMethod");
         privateMethod.setAccessible(true);
 
         // 2. 即可 hook private method
-        XposedHelpers.findAndHookMethod(finalMainActivityClass,  "testPrivateMethod",
+        XposedHelpers.findAndHookMethod(finalMainActivityClass, "testPrivateMethod",
                 new XC_MethodHook() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -143,4 +145,26 @@ public class Hook implements IXposedHookLoadPackage {
                     }
                 });
     }
+
+    private void callMethodTest(ClassLoader classLoader, Object object) {
+        // 呼叫無參方法，回傳 boolean
+        boolean testPrivateMethodReturn = (boolean) XposedHelpers.callMethod(object, "testPrivateMethod");
+        XposedBridge.log("testPrivateMethodReturn = " + testPrivateMethodReturn);
+
+        // 呼叫有參數方法，回傳 void
+        try {
+            Class<?> cls = XposedHelpers.findClassIfExists("com.example.xposedtest.CustomBean", classLoader);
+            Field fieldA = cls.getDeclaredField("a");
+            fieldA.setAccessible(true);
+            Object CustomBean = XposedHelpers.newInstance(cls);
+            fieldA.set(CustomBean, "hi");
+            XposedHelpers.callMethod(object, "testCallParamMethod", CustomBean);
+
+            fieldA.set(CustomBean, "hi2");
+            XposedHelpers.callMethod(object, "testCallParamMethod", CustomBean);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 }
